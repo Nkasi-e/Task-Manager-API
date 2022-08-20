@@ -2,7 +2,7 @@ const express = require("express");
 const User = require("../models/user");
 const auth = require("../middleware/authentication");
 const router = new express.Router();
-const multer = require("multer");
+const upload = require("../middleware/upload");
 
 //User Endpoint
 router.post("/users", async (req, res) => {
@@ -131,22 +131,48 @@ router.delete("/users/me", auth, async (req, res) => {
   }
 });
 
-//File Upload endpoint
-const upload = multer({
-  dest: "avatars",
-  limits: {
-    fileSize: 1000000,
+//File Upload endpoint for creating and updating
+router.post(
+  "/users/me/upload",
+  auth,
+  upload.single("avatar"),
+  async (req, res) => {
+    req.user.profileImage = req.file.buffer;
+    await req.user.save();
+    res.send("File upload successful");
   },
-  fileFilter(req, file, cb) {
-    if (!file.originalname.match(/\.(jpg|jpeg|png)$/)) {
-      cb(new Error(`Please upload a jpg/jpeg/png file`));
-    }
-    cb(undefined, true);
-  },
-});
+  (error, req, res, next) => {
+    res.status(400).send({ error: error.message });
+  }
+);
 
-router.post("/users/me/upload", upload.single("avatar"), (req, res) => {
-  res.send();
+//delete endpoint for file upload
+router.delete(
+  "/users/me/upload",
+  auth,
+  upload.single("avatar"),
+  async (req, res) => {
+    req.user.profileImage = undefined;
+    await req.user.save();
+    res.send("File deleted successfully");
+  },
+  (error, req, res, next) => {
+    res.status(400).send({ error: error.message });
+  }
+);
+
+//serving up file(avatar) url
+router.get("/users/:id/upload", async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user || !user.profileImage) {
+      throw new Error();
+    }
+    res.set("Content-Type", "image/jpg");
+    res.send(user.profileImage);
+  } catch (e) {
+    res.status(404).send();
+  }
 });
 
 module.exports = router;

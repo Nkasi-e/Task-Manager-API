@@ -50,6 +50,9 @@ const userSchema = new mongoose.Schema(
         },
       },
     ],
+    profileImage: {
+      type: Buffer,
+    },
   },
   {
     timestamps: true,
@@ -72,6 +75,7 @@ userSchema.methods.toJSON = function () {
   //Deleting some files off the object using the delete keyword
   delete userObject.password;
   delete userObject.tokens;
+  delete userObject.profileImage;
 
   return userObject;
 };
