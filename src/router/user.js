@@ -3,6 +3,7 @@ const User = require("../models/user");
 const auth = require("../middleware/authentication");
 const router = new express.Router();
 const upload = require("../middleware/upload");
+const sharp = require("sharp");
 
 //User Endpoint
 router.post("/users", async (req, res) => {
@@ -137,7 +138,12 @@ router.post(
   auth,
   upload.single("avatar"),
   async (req, res) => {
-    req.user.profileImage = req.file.buffer;
+    //using sharp to auto crop and format the image
+    const buffer = await sharp(req.file.buffer)
+      .resize({ width: 200, height: 200 })
+      .png()
+      .toBuffer();
+    req.user.profileImage = buffer;
     await req.user.save();
     res.send("File upload successful");
   },
@@ -168,7 +174,7 @@ router.get("/users/:id/upload", async (req, res) => {
     if (!user || !user.profileImage) {
       throw new Error();
     }
-    res.set("Content-Type", "image/jpg");
+    res.set("Content-Type", "image/png");
     res.send(user.profileImage);
   } catch (e) {
     res.status(404).send();
