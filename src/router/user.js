@@ -124,7 +124,6 @@ router.delete("/users/me", auth, async (req, res) => {
     // if (!user) {
     //   res.status(404).send({ error: "No user found" });
     // }
-
     await req.user.remove();
     res.send(req.user);
   } catch (e) {
