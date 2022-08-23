@@ -4,7 +4,7 @@ const User = require("../models/user");
 const auth = async (req, res, next) => {
   try {
     const token = req.header("Authorization").replace("Bearer ", "");
-    const verify = jwt.verify(token, "thisIsNodejs");
+    const verify = jwt.verify(token, process.env.JWT_SECRET);
     const user = await User.findOne({ _id: verify._id, "tokens.token": token }); //this line of code check if the given token is valid & if yes then focus on finding the user in the database
 
     if (!user) {
