@@ -26,7 +26,7 @@
 
 ## Root Endpoint
 
-[deployment site.com]
+[https://nkasitaskmanager-api.herokuapp.com]
 
 ## API Documentation
 
