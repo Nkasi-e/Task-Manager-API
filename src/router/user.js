@@ -4,16 +4,46 @@ const auth = require("../middleware/authentication");
 const router = new express.Router();
 const upload = require("../middleware/upload");
 const sharp = require("sharp");
+const statusCode = require("http-errors");
+const authSchema = require("../helper/validation");
 
 //User Endpoint
 router.post("/users", async (req, res) => {
-  const user = new User(req.body);
   try {
+    const { email, password } = req.body;
+    // if (!email || !password) {
+    //   throw statusCode.BadRequest();
+    // }
+    const result = await authSchema.validateAsync(req.body);
+    console.log(result);
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      throw statusCode.Conflict(`${email} has already been registered`);
+    }
+
+    const user = new User(req.body);
     await user.save();
-    const token = await user.generateAuthToken(); //token for the saved user
-    res.status(201).send({ user, token });
-  } catch (e) {
-    res.status(400).send(e);
+    const token = await user.generateAuthToken();
+    console.log(token);
+    res.status(201).json({ user });
+  } catch (e) {}
+
+  // const user = new User(req.body);
+  // try {
+  //   await user.save();
+  //   const token = await user.generateAuthToken(); //token for the saved user
+  //   res.status(201).send({ user, token });
+  // } catch (e) {
+  //   res.status(400).send(e);
+  // }
+});
+
+router.get("/users", async (req, res) => {
+  try {
+    const user = await User.find({});
+    res.json({ user });
+  } catch (err) {
+    res.status(500).json({ err: err });
   }
 });
 
@@ -25,9 +55,10 @@ router.post("/users/login", async (req, res) => {
       req.body.password
     );
     const token = await user.generateAuthToken();
-    res.send({ user, token }); //the toJSON is a custom func/method for hiding user data but not manually, located in the user model
+    res.send({ user });
+    return token; //the toJSON is a custom func/method for hiding user data but not manually, located in the user model
   } catch (e) {
-    res.status(400).send();
+    res.status(400).json({ e });
   }
 });
 
