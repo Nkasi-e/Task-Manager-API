@@ -3,6 +3,7 @@ const validator = require("validator");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const Task = require("./task");
+const Joi = require("joi");
 
 //Schema
 const userSchema = new mongoose.Schema(
@@ -12,7 +13,7 @@ const userSchema = new mongoose.Schema(
       require: true,
     },
     email: {
-      unique: true,
+      unique: [true, "email already exist"],
       type: String,
       required: true,
       validate(e) {
@@ -96,12 +97,12 @@ userSchema.methods.generateAuthToken = async function () {
 userSchema.statics.findByCredentials = async (email, password) => {
   const user = await User.findOne({ email });
   if (!user) {
-    throw new Error("Unable to login");
+    throw new Error("Invalid User");
   }
 
   const isMatch = await bcrypt.compare(password, user.password);
   if (!isMatch) {
-    throw new Error("Unable to login");
+    throw new Error("Invalid username and password");
   }
 
   return user;
@@ -128,7 +129,30 @@ userSchema.pre("remove", async function (next) {
   next();
 });
 
+const validateUser = (user) => {
+  const schema = Joi.object({
+    name: Joi.string().min(3).max(50).required(),
+    email: Joi.string().email().min(5).max(500).required(),
+    password: Joi.string().min(8).max(1024).required(),
+    age: Joi.number(),
+  });
+  return schema.validate(user);
+};
+
+const validateLogin = (user) => {
+  const schema = Joi.object({
+    email: Joi.string().email().min(5).max(500).required(),
+    password: Joi.string().min(8).max(1024).required(),
+  });
+
+  return schema.validate(user);
+};
+
 //Setting up the first function model
 const User = mongoose.model("User", userSchema);
 
-module.exports = User;
+module.exports = {
+  User,
+  validateUser,
+  validateLogin,
+};

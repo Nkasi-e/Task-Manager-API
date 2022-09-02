@@ -1,66 +1,83 @@
 const express = require("express");
-const User = require("../models/user");
+const { User, validateUser, validateLogin } = require("../models/user");
 const auth = require("../middleware/authentication");
 const router = new express.Router();
 const upload = require("../middleware/upload");
 const sharp = require("sharp");
 const statusCode = require("http-errors");
-const authSchema = require("../helper/validation");
+const validateMiddleware = require("../helper/validation");
 
 //User Endpoint
-router.post("/users", async (req, res) => {
-  try {
-    const { email, password } = req.body;
-    // if (!email || !password) {
-    //   throw statusCode.BadRequest();
-    // }
-    const result = await authSchema.validateAsync(req.body);
-    console.log(result);
-    const existingUser = await User.findOne({ email });
-    if (existingUser) {
-      throw statusCode.Conflict(`${email} has already been registered`);
+router.post(
+  "/users",
+  [validateMiddleware(validateUser)],
+  async (req, res, next) => {
+    try {
+      const { name, email, password } = req.body;
+      const { error } = req.body;
+      if (error) {
+        res.status(400).send(`${error}`);
+      }
+      const existingUser = await User.findOne({ email });
+      if (existingUser) {
+        res.status(409).send(`email already exist`);
+      }
+      const user = new User(req.body);
+      await user.save();
+      await user.generateAuthToken(); //token for the saved user
+      res.status(201).send({ user });
+      next();
+    } catch (e) {
+      res.status(400).send();
     }
-
-    const user = new User(req.body);
-    await user.save();
-    const token = await user.generateAuthToken();
-    console.log(token);
-    res.status(201).json({ user });
-  } catch (e) {}
-
-  // const user = new User(req.body);
-  // try {
-  //   await user.save();
-  //   const token = await user.generateAuthToken(); //token for the saved user
-  //   res.status(201).send({ user, token });
-  // } catch (e) {
-  //   res.status(400).send(e);
-  // }
-});
+  }
+);
 
 router.get("/users", async (req, res) => {
   try {
     const user = await User.find({});
-    res.json({ user });
+    res.json({ user, total: user.length });
   } catch (err) {
     res.status(500).json({ err: err });
   }
 });
 
 //Login User route
-router.post("/users/login", async (req, res) => {
-  try {
-    const user = await User.findByCredentials(
-      req.body.email,
-      req.body.password
-    );
-    const token = await user.generateAuthToken();
-    res.send({ user });
-    return token; //the toJSON is a custom func/method for hiding user data but not manually, located in the user model
-  } catch (e) {
-    res.status(400).json({ e });
+router.post(
+  "/users/login",
+  [validateMiddleware(validateLogin)],
+  async (req, res) => {
+    try {
+      const { email, password } = req.body;
+
+      if (!email || !password) {
+        res.status(400).send("Please provide email and password");
+      }
+      const user = await User.findOne({ email });
+      if (!user) {
+        res.status(400).send(`Invalid username or password`);
+      }
+      const isPasswordCorrect = await User.findByCredentials(
+        req.body.email,
+        req.body.password
+      );
+      if (!isPasswordCorrect) {
+        res.status(400).send("Invalid Credentials");
+      }
+      await user.generateAuthToken();
+      res.send({ user });
+      //   const user = await User.findByCredentials(
+      //     req.body.email,
+      //     req.body.password
+      //   );
+      //   await user.generateAuthToken();
+      //   res.send({ user });
+      //   //the toJSON is a custom func/method for hiding user data but not manually, located in the user model
+    } catch (e) {
+      res.status(400).json({ e });
+    }
   }
-});
+);
 
 //Logout User route
 router.post("/users/logout", auth, async (req, res) => {
@@ -87,35 +104,10 @@ router.post("/users/logoutAll", auth, async (req, res) => {
   }
 });
 
-//Reading all users
-// router.get("/users", auth, async (req, res) => {
-//   try {
-//     const user = await User.find({});
-//     res.send(user);
-//   } catch (e) {
-//     res.status(500).send();
-//   }
-// });
-
 //Read user - like profile
 router.get("/users/me", auth, async (req, res) => {
   res.send(req.user);
 });
-
-//Reading a specific user
-// router.get("/users/:id", async (req, res) => {
-//   const _id = req.params.id;
-//   try {
-//     const user = await User.findById(_id);
-//     if (!user) {
-//       return res.status(404).send();
-//     }
-
-//     res.send(user);
-//   } catch (e) {
-//     res.status(500).send();
-//   }
-// });
 
 //Updating a user
 router.patch("/users/me", auth, async (req, res) => {
@@ -135,13 +127,6 @@ router.patch("/users/me", auth, async (req, res) => {
     updates.forEach((update) => (req.user[update] = req.body[update]));
     await req.user.save();
 
-    /* const user = await User.findByIdAndUpdate(req.params.id, req.body, {
-      new: true,
-      runValidators: true,
-    });*/
-    // if (!user) {
-    //   res.status(404).send();
-    // }
     res.send(req.user);
   } catch (error) {
     res.status(400).send();
@@ -151,10 +136,6 @@ router.patch("/users/me", auth, async (req, res) => {
 //Deleting users
 router.delete("/users/me", auth, async (req, res) => {
   try {
-    // const user = await User.findByIdAndDelete(req.user._id);
-    // if (!user) {
-    //   res.status(404).send({ error: "No user found" });
-    // }
     await req.user.remove();
     res.send(req.user);
   } catch (e) {
